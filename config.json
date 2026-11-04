@@ -1,0 +1,16 @@
+{
+  "defaults": {
+    "role": "Access Switch",
+    "dayn_template": "DayN-Template"
+  },
+  "modes": {
+    "STAGING_CONFIG": { "day0_template": "Day0-Template" },
+    "FACTORY_CONFIG": { "day0_template": "Day0-Template" }
+  },
+  "sites": {
+    "Brisbane CBD Office": { "catc_path": "Global/USA/San Jose", "netbox_site": "Brisbane CBD Office" }
+  },
+  "images": {
+    "C9300-24P": ""
+  }
+}
