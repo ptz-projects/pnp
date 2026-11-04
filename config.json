@@ -1,16 +1,37 @@
 {
   "defaults": {
     "role": "Access Switch",
-    "dayn_template": "DayN-Template"
+    "dayn_template": "DayN-Template",
+    "system_mtu": "1500",
+    "native_vlan": "1"
   },
   "modes": {
-    "STAGING_CONFIG": { "day0_template": "Day0-Template" },
-    "FACTORY_CONFIG": { "day0_template": "Day0-Template" }
+    "STAGING_CONFIG": {
+      "day0_template": "TM-PNP-SW-STAGING-IN-A-LAB",
+      "params": {
+        "Hostname": "{hostname}",
+        "SystemMTU": "{system_mtu}"
+      }
+    },
+    "FACTORY_CONFIG": {
+      "day0_template": "TM-PNP-SW-FACTORY-INSTALL-AT-SITE",
+      "params": {
+        "Hostname": "{hostname}",
+        "SystemMTU": "{system_mtu}",
+        "MgmtVlan": "{mgmt_vlan}",
+        "UplinkInterface": "{uplink_interface}",
+        "AllowedVlans": "{allowed_vlans}",
+        "NativeVlan": "{native_vlan}",
+        "SwitchIP": "{mgmt_ip}",
+        "SubnetMask": "{subnet_mask}",
+        "Gateway": "{gateway}"
+      }
+    }
   },
   "sites": {
     "Brisbane CBD Office": { "catc_path": "Global/APAC/Australia/Brisbane", "netbox_site": "Brisbane CBD Office" }
   },
   "images": {
-    "C9300-24P": ""
+    "C9300-48P": ""
   }
 }
