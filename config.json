@@ -30,7 +30,7 @@
     }
   },
   "sites": {
-    "Brisbane CBD Office": { "catc_path": "Global/APAC/Australia/Brisbane", "netbox_site": "Brisbane CBD Office" }
+    "Brisbane CBD Office": { "catc_path": "Global/APAC/Australia/Brisbane/Brisbane CBD Office", "netbox_site": "Brisbane CBD Office" }
   },
   "images": {
     "C9300-48P": ""
