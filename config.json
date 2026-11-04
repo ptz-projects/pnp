@@ -2,6 +2,7 @@
   "defaults": {
     "role": "Access Switch",
     "dayn_template": "DayN-Template",
+    "template_project": "Onboarding Configuration",
     "system_mtu": "1500",
     "native_vlan": "1"
   },
