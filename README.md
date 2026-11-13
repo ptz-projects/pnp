@@ -27,12 +27,19 @@ Files read by the "Catalyst Center PnP Lifecycle" workflow (from the repo's main
 
 ## Day N (runs later, as a second workflow)
 - When a switch is claimed, workflow 1 tags the NetBox device `dayn-pending`, sets its `pnp_option` custom field, and stores the Day N plan (templates and every variable, including host ports) in the device's local context. The spreadsheet is not needed again.
-- Workflow 2 ("Catalyst Center PnP Day N") runs on a schedule. Pending switches that are reachable and managed in Catalyst Center get the composite template deployed (tag `dayn-deploying`). On the next run it checks the result: success removes the tags, clears the stored plan and sets NetBox status to active; failure sets `dayn-failed` with the reason. To retry a failed switch, fix the cause and add the `dayn-pending` tag again.
+- Workflow 2 ("Catalyst Center PnP Day N") runs on a schedule. Pending switches that are reachable and managed in Catalyst Center get the composite template deployed (tag `dayn-deploying`). On the next run it checks the result: success removes the tags, clears the stored plan and sets NetBox status to staged (active is set by the cleanup workflow after installation); failure sets `dayn-failed` with the reason. To retry a failed switch, fix the cause and add the `dayn-pending` tag again.
 - NetBox needs: tags `dayn-pending`, `dayn-deploying`, `dayn-failed`; custom field `pnp_option` (text) on devices.
 - Staging: base + management interface + host ports (composite in `config.json`). Factory: base + host ports. L3 is not set up yet.
 - Template secrets (admin password, enable secret, key-encrypt string) are never sent by the workflow; keep them as defaults inside the Catalyst Center templates.
 - `config.json` -> `dayn`: project, composites and member templates, template variables per mode. Sites need a `tz` entry (name, hours, minutes).
 - Ports tab: full interface names (GigabitEthernet1/0/1-24), one common prefix, numbered 1-48; optional `description` column.
+
+## Cleanup workflow (not built yet) - notes
+Staging switches are managed by Catalyst Center through the Gi0/0 management port (DHCP) while in the lab. The Day N management-interface template configures the final SVI (static IP) but does not change the address Catalyst Center manages, so the switch stays reachable after Day N. When the switch is installed at site, a cleanup workflow should, in this order:
+1. confirm the switch answers on its final SVI address, and update its management IP in Catalyst Center to that address (resync)
+2. only then shut Gi0/0 (a small cleanup template), so management is never lost
+3. set the NetBox primary IP and status active (Day N leaves the device `staged`)
+4. remove any leftover Catalyst Center device tag and NetBox `dayn-*` tags, and re-check compliance
 
 ## Safety behaviour
 - Existing NetBox device: kept, never overwritten; only a blank serial is filled. Different site, model or serial = skipped with a Webex message.
