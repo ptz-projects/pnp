@@ -1,29 +1,42 @@
-# PnP device data
+# PnP onboarding data
 
-Two files live at the top level of the GitHub repo. The workflow downloads both on every run.
-(raw.githubusercontent.com caches for up to ~5 minutes after a commit.)
+Files read by the "Catalyst Center PnP Lifecycle" workflow (from the repo's main branch):
 
-## devices.xlsx  (filled in by the person adding switches)
-| Tab | One row per | Columns |
+| File | Who edits it | Purpose |
 |---|---|---|
-| Devices | switch | serial, pid, hostname, site, role (optional), mgmt_vlan |
-| VLANs | VLAN per switch | hostname (or `*` for every switch), vlan_id, vlan_name |
-| Ports | access port | hostname, interface, access_vlan |
+| `devices.xlsx` | Anyone adding switches | The current batch of switches (Devices, VLANs, Ports tabs) |
+| `template.xlsx` | Nobody (copy it) | Blank copy with headers, dropdowns, Instructions and Examples tabs |
+| `config.json` | Network team | Sites, Day 0 templates and variables per mode, defaults, image IDs |
 
-- Ports accept ranges: `GigabitEthernet1/0/1-24` (up to 96 ports per row).
-- The management VLAN must be listed on the VLANs tab; every port VLAN must be listed too.
-- VLAN names: no spaces, max 32 chars. Serial: 8-14 letters/digits.
-- Keep header rows and tab names unchanged. Other tabs (e.g. Instructions) are ignored.
-- The workflow glues the three tabs into one record per switch and reports any mismatch (unknown hostname, duplicate VLAN/port, unknown site...) to Webex before touching Catalyst Center.
+## Adding a batch
+1. Copy `template.xlsx` to `devices.xlsx`. Do not reuse an old filled-in file; git history keeps the old batches.
+2. Fill the Devices, VLANs and Ports tabs. The Examples tab shows a Staging row and a Factory row.
+3. Commit `devices.xlsx`, start the workflow, choose **Staging in a Lab** or **Factory Install at Site**. The choice applies to every row in the file.
 
-## config.json  (maintained by the network team, not by technicians)
-- `modes`: Day 0 template per answer to "Staging in a Lab" / "Factory Install at Site".
-- `sites`: friendly site name -> Catalyst Center site path + NetBox site name (exact).
-- `images`: golden image UUID per PID (blank = skip image upgrade).
-- `defaults`: default role name and the Day N template.
+## Columns by mode
+- Staging in a Lab: serial, pid, hostname, site, mgmt_vlan (optional: role, system_mtu, software_upgrade).
+- Factory Install at Site: also mgmt_ip (with prefix), gateway, uplink_interface (optional: native_vlan).
+- `software_upgrade`: Yes upgrades to the image for the model in `config.json` -> `images` (error if none); blank or No skips the upgrade.
 
-No NetBox IDs are stored anywhere. For each switch the workflow looks up, in NetBox:
-- the site by its NetBox name (from `sites`),
-- the device type by model name = the PID in the sheet,
-- the role by name (sheet `role` column, or the default).
-If any of these is missing or ambiguous, that switch is NOT onboarded and Webex says which name is missing.
+## config.json
+- `defaults`: role, template project, MTU, native VLAN, Day N template name.
+- `modes`: per mode, the Day 0 template name and its template variables. Values use placeholders: `{hostname}`, `{system_mtu}`, `{mgmt_vlan}`, `{uplink_interface}`, `{allowed_vlans}`, `{native_vlan}`, `{mgmt_ip}`, `{subnet_mask}`, `{gateway}`, `{pid}`, `{serial}`.
+- `sites`: sheet site name -> Catalyst Center path (`catc_path`) and NetBox site (`netbox_site`). Both must exist.
+- `images`: model (pid) -> Catalyst Center image ID, used only when `software_upgrade` is Yes.
+- Adding a site? Add it here and to the site list on the Lists tab of `template.xlsx`.
+
+## Day N (runs later, as a second workflow)
+- When a switch is claimed, workflow 1 tags the NetBox device `dayn-pending`, sets its `pnp_option` custom field, and stores the Day N plan (templates and every variable, including host ports) in the device's local context. The spreadsheet is not needed again.
+- Workflow 2 ("Catalyst Center PnP Day N") runs on a schedule. Pending switches that are reachable and managed in Catalyst Center get the composite template deployed (tag `dayn-deploying`). On the next run it checks the result: success removes the tags, clears the stored plan and sets NetBox status to active; failure sets `dayn-failed` with the reason. To retry a failed switch, fix the cause and add the `dayn-pending` tag again.
+- NetBox needs: tags `dayn-pending`, `dayn-deploying`, `dayn-failed`; custom field `pnp_option` (text) on devices.
+- Staging: base + management interface + host ports (composite in `config.json`). Factory: base + host ports. L3 is not set up yet.
+- Template secrets (admin password, enable secret, key-encrypt string) are never sent by the workflow; keep them as defaults inside the Catalyst Center templates.
+- `config.json` -> `dayn`: project, composites and member templates, template variables per mode. Sites need a `tz` entry (name, hours, minutes).
+- Ports tab: full interface names (GigabitEthernet1/0/1-24), one common prefix, numbered 1-48; optional `description` column.
+
+## Safety behaviour
+- Existing NetBox device: kept, never overwritten; only a blank serial is filled. Different site, model or serial = skipped with a Webex message.
+- Switch already in Catalyst Center (anything but Unclaimed) = skipped with a Webex message.
+- A skipped switch is not imported or claimed. One bad row in the sheet's validation stops the whole run.
+
+Dummy data only: the repo is public.

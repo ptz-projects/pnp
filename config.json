@@ -30,10 +30,85 @@
     }
   },
   "sites": {
-    "Brisbane CBD Office": { "catc_path": "Global/APAC/Australia/Brisbane/Brisbane CBD Office", "netbox_site": "Brisbane CBD Office" },
-    "Perth CBD Office": { "catc_path": "Global/APAC/Australia/Perth/Perth CBD Office", "netbox_site": "Perth CBD Office" }
+    "Brisbane CBD Office": {
+      "catc_path": "Global/APAC/Australia/Brisbane/Brisbane CBD Office",
+      "netbox_site": "Brisbane CBD Office",
+      "tz": {
+        "name": "AEST",
+        "hours": "10",
+        "minutes": "0"
+      }
+    },
+    "Perth CBD Office": {
+      "catc_path": "Global/APAC/Australia/Perth/Perth CBD Office",
+      "netbox_site": "Perth CBD Office",
+      "tz": {
+        "name": "AWST",
+        "hours": "8",
+        "minutes": "0"
+      }
+    }
   },
   "images": {
     "C9300-48P": ""
+  },
+  "dayn": {
+    "_note": "Secrets (local admin password, enable secret, key-encrypt string) are NOT sent by the workflow. Keep them as defaults inside the Catalyst Center templates.",
+    "project": "CUSTA Standard Template",
+    "host_port_max": 48,
+    "plans": {
+      "STAGING_CONFIG": {
+        "L2": {
+          "composite": "TM-STAGING-L2-SWITCH",
+          "members": [
+            "TM-DEV-BASE-CONFIG",
+            "TM-STAGING-L2-MGMT-INTERFACE",
+            "TM-STAGING-L2-HOST-CONFIG"
+          ],
+          "host_ports": true,
+          "require": [
+            "mgmt_ip",
+            "gateway",
+            "uplink_interface"
+          ],
+          "params": {
+            "TZ_NAME": "{tz_name}",
+            "TZ_HOURS": "{tz_hours}",
+            "TZ_MINUTES": "{tz_minutes}",
+            "MGMT_OR_LOOPBACK_IF": "{mgmt_if}",
+            "DEVICE_LOCATION": "{site}",
+            "ASSET_ID": "{serial}",
+            "HOST_NAME": "{hostname}",
+            "MgmtVlan": "{mgmt_vlan}",
+            "UplinkInterface": "{uplink_interface}",
+            "AllowedVlans": "{allowed_vlans}",
+            "NativeVlan": "{native_vlan}",
+            "SwitchIP": "{mgmt_ip}",
+            "SubnetMask": "{subnet_mask}",
+            "Gateway": "{gateway}"
+          }
+        }
+      },
+      "FACTORY_CONFIG": {
+        "L2": {
+          "composite": "TM-FACTORY-L2-SWITCH",
+          "members": [
+            "TM-DEV-BASE-CONFIG",
+            "TM-STAGING-L2-HOST-CONFIG"
+          ],
+          "host_ports": true,
+          "require": [],
+          "params": {
+            "TZ_NAME": "{tz_name}",
+            "TZ_HOURS": "{tz_hours}",
+            "TZ_MINUTES": "{tz_minutes}",
+            "MGMT_OR_LOOPBACK_IF": "{mgmt_if}",
+            "DEVICE_LOCATION": "{site}",
+            "ASSET_ID": "{serial}",
+            "HOST_NAME": "{hostname}"
+          }
+        }
+      }
+    }
   }
 }
