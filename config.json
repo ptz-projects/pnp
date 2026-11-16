@@ -4,7 +4,9 @@
     "dayn_template": "DayN-Template",
     "template_project": "Onboarding Configuration",
     "system_mtu": "1500",
-    "native_vlan": "1"
+    "native_vlan": "1",
+    "create_missing_sites": "Yes",
+    "country": "Australia"
   },
   "modes": {
     "STAGING_CONFIG": {
@@ -29,26 +31,7 @@
       }
     }
   },
-  "sites": {
-    "Brisbane CBD Office": {
-      "catc_path": "Global/APAC/Australia/Brisbane/Brisbane CBD Office",
-      "netbox_site": "Brisbane CBD Office",
-      "tz": {
-        "name": "AEST",
-        "hours": "10",
-        "minutes": "0"
-      }
-    },
-    "Perth CBD Office": {
-      "catc_path": "Global/APAC/Australia/Perth/Perth CBD Office",
-      "netbox_site": "Perth CBD Office",
-      "tz": {
-        "name": "AWST",
-        "hours": "8",
-        "minutes": "0"
-      }
-    }
-  },
+  "sites": {},
   "images": {
     "C9300-48P": ""
   },
@@ -62,8 +45,8 @@
           "composite": "TM-STAGING-L2-SWITCH",
           "members": [
             "TM-DEV-BASE-CONFIG",
-            "TM-STAGING-L2-MGMT-INTERFACE",
-            "TM-STAGING-L2-HOST-CONFIG"
+            "TM-STAGING-L2-HOST-CONFIG",
+            "TM-STAGING-L2-MGMT-INTERFACE"
           ],
           "host_ports": true,
           "require": [

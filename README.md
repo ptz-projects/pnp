@@ -21,9 +21,15 @@ Files read by the "Catalyst Center PnP Lifecycle" workflow (from the repo's main
 ## config.json
 - `defaults`: role, template project, MTU, native VLAN, Day N template name.
 - `modes`: per mode, the Day 0 template name and its template variables. Values use placeholders: `{hostname}`, `{system_mtu}`, `{mgmt_vlan}`, `{uplink_interface}`, `{allowed_vlans}`, `{native_vlan}`, `{mgmt_ip}`, `{subnet_mask}`, `{gateway}`, `{pid}`, `{serial}`.
-- `sites`: sheet site name -> Catalyst Center path (`catc_path`) and NetBox site (`netbox_site`). Both must exist.
+- `sites`: optional overrides only (leave empty `{}`). Sites come from NetBox, see **Sites** below.
 - `images`: model (pid) -> Catalyst Center image ID, used only when `software_upgrade` is Yes.
-- Adding a site? Add it here and to the site list on the Lists tab of `template.xlsx`.
+
+## Sites (NetBox is the source of truth)
+- The `site` column in the sheet is the **NetBox site name** (case does not matter). Nothing to edit in `config.json` when a site is added.
+- Each NetBox site needs two things: the custom field **`catc_site_path`** (Site model, text), e.g. `Global/APAC/Australia/Perth/Perth CBD Office`, and the built-in **Time zone** (e.g. Australia/Perth). The time zone becomes the switch `clock timezone` at Day N.
+- **Brand new site?** The workflow checks the Catalyst Center site *before* importing anything. If it does not exist, that switch is skipped with a Webex message and nothing is imported, claimed or changed in NetBox. Create the site under Design > Network Hierarchy, then run again.
+- **Auto-create (optional):** set `config.json` -> `defaults.create_missing_sites` to `Yes` (default `No`, and committing the change is your confirmation). A missing site is then created as a building under its parent path using the NetBox site's Physical address, Latitude and Longitude, plus `defaults.country`. The parent area must already exist. The workflow waits 20 seconds, looks the site up again and only continues if it is found. The Webex success message says whether the site was created this run. Set it back to `No` afterwards.
+- Optional per-site override in `config.json` -> `sites` (`catc_path`, `netbox_site`, `tz`) still works for odd cases.
 
 ## Day N (runs later, as a second workflow)
 - When a switch is claimed, workflow 1 tags the NetBox device `dayn-pending`, sets its `pnp_option` custom field, and stores the Day N plan (templates and every variable, including host ports) in the device's local context. The spreadsheet is not needed again.
@@ -31,7 +37,7 @@ Files read by the "Catalyst Center PnP Lifecycle" workflow (from the repo's main
 - NetBox needs: tags `dayn-pending`, `dayn-deploying`, `dayn-failed`; custom field `pnp_option` (text) on devices.
 - Staging: base + management interface + host ports (composite in `config.json`). Factory: base + host ports. L3 is not set up yet.
 - Template secrets (admin password, enable secret, key-encrypt string) are never sent by the workflow; keep them as defaults inside the Catalyst Center templates.
-- `config.json` -> `dayn`: project, composites and member templates, template variables per mode. Sites need a `tz` entry (name, hours, minutes).
+- `config.json` -> `dayn`: project, composites and member templates, template variables per mode. The time zone comes from the NetBox site (Time zone field).
 - Ports tab: full interface names (GigabitEthernet1/0/1-24), one common prefix, numbered 1-48; optional `description` column.
 
 ## Cleanup workflow (not built yet) - notes
@@ -63,7 +69,9 @@ Staging switches are managed by Catalyst Center through the Gi0/0 management por
 |---|---|---|---|
 | Spreadsheet or config.json problem (any row) | Webex | `Workflow Failed during validation: <list>`. Nothing is imported for any switch. | Fix every item in the list (see the validation table below), commit, run again. |
 | PnP option dropdown empty or wrong | Webex | `config.json has no entry for mode ''` / `Unknown PnP option flag ''` | Pick a value in the run input. If the dropdown shows but is ignored, relink the condition's Property to the input variable in the workflow editor. |
-| NetBox site, device type or role not found (or matches several) | Webex | `NetBox lookup failed for <host> (<serial>), not onboarded: <what> '<name>' not found in NetBox` | Create it in NetBox, or fix the name in the sheet / `config.json` (`netbox_site`). |
+| NetBox site, device type or role not found (or matches several) | Webex | `NetBox lookup failed for <host> (<serial>), not onboarded: <what> '<name>' not found in NetBox` | Create it in NetBox, or fix the name in the sheet. |
+| NetBox site has no `catc_site_path` or no Time zone | Webex | `NetBox lookup failed ...: Site '<x>' has no Catalyst Center site path (set the catc_site_path custom field on the NetBox site)` / `has no time zone` / `time zone '<z>' which could not be converted` | Set the field on the NetBox site, run again. |
+| Site does not exist in Catalyst Center (new site) | Webex | `Skipped, not onboarded: <host> (<serial>). site '<path>' was not found in Catalyst Center. Create the site under Design > Network Hierarchy ... Nothing was imported or claimed and NetBox was not changed.` | Create the site in Catalyst Center (or fix `catc_site_path`), run again. With auto-create on, the message instead says why it could not create it (parent area missing, NetBox address, latitude or longitude blank, or the site still not found after creating). |
 | NetBox tag missing | Webex | `...NetBox tag 'dayn-pending' does not exist (create the tags dayn-pending, dayn-deploying and dayn-failed first)` | Create the three tags in NetBox. |
 | Device exists in NetBox with a different site, model or serial | Webex | `Skipped, not onboarded: <host> (<serial>). NetBox device <host> (ID n) already exists but: site is '...' in NetBox; device type is '...'; serial is '...'`. NetBox is not changed. | Fix the sheet or the NetBox record, run again. |
 | Two devices with the same name in NetBox | Webex | `Skipped... n devices named <host> exist in NetBox` | Remove the duplicate in NetBox. |
@@ -85,14 +93,13 @@ Validation messages (all arrive in the single `Workflow Failed during validation
 | `... serial X is also used by <host>` | Same serial on two rows (copy/paste). |
 | `... mgmt_ip X is also used by <host>` | Same management address on two rows. |
 | `... uplink_interface X is also listed as a host port on the Ports tab` | Remove that interface from Ports (it would be turned into an access port). |
-| `... unknown site '<name>' (add it to config.json)` | Add the site to `config.json` and to the Lists tab. |
 | `... mgmt_ip '<x>' is not valid` / `gateway ... is not inside <net>` / `gateway '<x>' is not a valid IP address` | Use address/prefix (10.1.10.21/24); the gateway must be inside that subnet. |
 | `... software_upgrade is Yes but config.json 'images' has no image ID for <pid>` | Add the image ID, or set software_upgrade to No. |
 | `VLANs row n: hostname '<x>' is not on the Devices tab` / `vlan_id '<x>' is not a number` / `VLAN n listed twice` | Fix the VLANs tab (hostname `*` applies to every switch). |
 | `Ports row n: ... is not on the Devices tab` / `access_vlan ... is not a number` / `<port> listed twice` | Fix the Ports tab. Use full names (GigabitEthernet0/1) or ranges (GigabitEthernet0/1-8). |
 | `... no Day N plan for <mode> / <type> in config.json` | Add the plan, or set switch_type to a supported value (L2). |
 | `... column '<x>' is needed for <type> Day N configuration` | Fill the column (for Staging L2: mgmt_ip, gateway, uplink_interface). |
-| `... Day N variable '<x>' needs '<y>' (a tz entry on the site in config.json, or a Devices column)` | Add `tz` to the site in `config.json`. |
+| `... Day N variable '<x>' needs '<y>' (a Devices column, or a tz entry for the site in config.json)` | Add the column, or set the NetBox site's Time zone. |
 | `... port <x> cannot be set by the host port template (needs <prefix>/1 to /48)` | Host ports must look like GigabitEthernet0/5, numbered 1-48. |
 | `... ports use more than one prefix (A and B)` | One prefix per switch (the host port template supports one). |
 | `config.json is not valid JSON` / `param '<x>' uses unknown field` | Fix `config.json` syntax or the placeholder name. |
