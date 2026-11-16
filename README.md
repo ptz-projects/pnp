@@ -29,6 +29,7 @@ Files read by the "Catalyst Center PnP Lifecycle" workflow (from the repo's main
 - Each NetBox site needs two things: the custom field **`catc_site_path`** (Site model, text), e.g. `Global/APAC/Australia/Perth/Perth CBD Office`, and the built-in **Time zone** (e.g. Australia/Perth). The time zone becomes the switch `clock timezone` at Day N.
 - **Brand new site?** The workflow checks the Catalyst Center site *before* importing anything. If it does not exist, that switch is skipped with a Webex message and nothing is imported, claimed or changed in NetBox. Create the site under Design > Network Hierarchy, then run again.
 - **Auto-create (optional):** set `config.json` -> `defaults.create_missing_sites` to `Yes` (default `No`, and committing the change is your confirmation). A missing site is then created as a building under its parent path using the NetBox site's Physical address, Latitude and Longitude, plus `defaults.country`. The parent area must already exist. The workflow waits 20 seconds, looks the site up again and only continues if it is found. The Webex success message says whether the site was created this run. Set it back to `No` afterwards.
+- **Site dropdown:** run `python3 sync_sites.py devices.xlsx template.xlsx` (set `NETBOX_URL` and `NETBOX_TOKEN` first, close Excel first). It copies the NetBox site names into the Lists tab, widens the dropdown, and writes `sites.csv` listing any site missing `catc_site_path` or Time zone. Run it whenever a site is added in NetBox.
 - Optional per-site override in `config.json` -> `sites` (`catc_path`, `netbox_site`, `tz`) still works for odd cases.
 
 ## Day N (runs later, as a second workflow)
@@ -38,7 +39,7 @@ Files read by the "Catalyst Center PnP Lifecycle" workflow (from the repo's main
 - Staging: base + management interface + host ports (composite in `config.json`). Factory: base + host ports. L3 is not set up yet.
 - Template secrets (admin password, enable secret, key-encrypt string) are never sent by the workflow; keep them as defaults inside the Catalyst Center templates.
 - `config.json` -> `dayn`: project, composites and member templates, template variables per mode. The time zone comes from the NetBox site (Time zone field).
-- Ports tab: full interface names (GigabitEthernet1/0/1-24), one common prefix, numbered 1-48; optional `description` column.
+- Ports tab and `uplink_interface`: short names are expanded (Gi, Te, Fa to GigabitEthernet etc.; port numbers are never changed). Full interface names (GigabitEthernet1/0/1-24), one common prefix, numbered 1-48; optional `description` column.
 
 ## Cleanup workflow (not built yet) - notes
 Staging switches are managed by Catalyst Center through the Gi0/0 management port (DHCP) while in the lab. The Day N management-interface template configures the final SVI (static IP) but does not change the address Catalyst Center manages, so the switch stays reachable after Day N. When the switch is installed at site, a cleanup workflow should, in this order:
@@ -46,6 +47,15 @@ Staging switches are managed by Catalyst Center through the Gi0/0 management por
 2. only then shut Gi0/0 (a small cleanup template), so management is never lost
 3. set the NetBox primary IP and status active (Day N leaves the device `staged`)
 4. remove any leftover Catalyst Center device tag and NetBox `dayn-*` tags, and re-check compliance
+
+## Future iterations (not built)
+- **Stacks:** the host-port template supports one interface prefix per switch (e.g. `GigabitEthernet1/0`). A stack (Gi1/0/x plus Gi2/0/x) fails validation with "ports use more than one prefix". Needs a second prefix parameter or generating the port lines in Python. Single switches only for now. Stack members also need `stack: true` on the PnP import and per-member serials.
+- Auto-create of missing sites needs a live test (documented site-create call, untested).
+
+## Refreshing a stale Day N plan
+- The Day N plan is saved in NetBox (Local config context, `pnp_dayn`) when the switch is claimed. Fixing the sheet afterwards does not change it.
+- To pick up sheet changes for a switch that is already in Catalyst Center (e.g. a corrected uplink), set `config.json` -> `defaults.refresh_plan` to `Yes`, commit, and run Workflow 1 again. A switch that is already in PnP then gets its plan rebuilt from the sheet and re-queued (`dayn-pending`). Webex says "Day N plan refreshed from the sheet".
+- Only switches that still have Day N outstanding are refreshed (tag `dayn-failed` or `dayn-pending`, or a plan still stored). A switch whose Day N is deploying right now is left alone, and so is one that finished Day N (no stored plan). Nothing else in NetBox is changed. Set it back to `No` afterwards.
 
 ## Catalyst Center device tag (Day N)
 - Day N adds a Catalyst Center tag to the switch just before it deploys the templates, and removes it after a successful deploy. A failed deploy leaves the tag on.
@@ -70,6 +80,7 @@ Staging switches are managed by Catalyst Center through the Gi0/0 management por
 | Spreadsheet or config.json problem (any row) | Webex | `Workflow Failed during validation: <list>`. Nothing is imported for any switch. | Fix every item in the list (see the validation table below), commit, run again. |
 | PnP option dropdown empty or wrong | Webex | `config.json has no entry for mode ''` / `Unknown PnP option flag ''` | Pick a value in the run input. If the dropdown shows but is ignored, relink the condition's Property to the input variable in the workflow editor. |
 | NetBox site, device type or role not found (or matches several) | Webex | `NetBox lookup failed for <host> (<serial>), not onboarded: <what> '<name>' not found in NetBox` | Create it in NetBox, or fix the name in the sheet. |
+| Site name typed wrongly | Webex | `NetBox lookup failed ...: Site 'Perht CBD Office' not found in NetBox (closest NetBox sites: Perth CBD Office, ...)` | Fix the spelling in the sheet. |
 | NetBox site has no `catc_site_path` or no Time zone | Webex | `NetBox lookup failed ...: Site '<x>' has no Catalyst Center site path (set the catc_site_path custom field on the NetBox site)` / `has no time zone` / `time zone '<z>' which could not be converted` | Set the field on the NetBox site, run again. |
 | Site does not exist in Catalyst Center (new site) | Webex | `Skipped, not onboarded: <host> (<serial>). site '<path>' was not found in Catalyst Center. Create the site under Design > Network Hierarchy ... Nothing was imported or claimed and NetBox was not changed.` | Create the site in Catalyst Center (or fix `catc_site_path`), run again. With auto-create on, the message instead says why it could not create it (parent area missing, NetBox address, latitude or longitude blank, or the site still not found after creating). |
 | NetBox tag missing | Webex | `...NetBox tag 'dayn-pending' does not exist (create the tags dayn-pending, dayn-deploying and dayn-failed first)` | Create the three tags in NetBox. |
@@ -109,6 +120,7 @@ Validation messages (all arrive in the single `Workflow Failed during validation
 | Situation | Where | Message / what you see | Fix |
 |---|---|---|---|
 | Switch not in inventory, or not Reachable and Managed yet | Run only | Nothing sent. The switch stays `dayn-pending` and is retried every run. | Wait for onboarding; check the switch is reachable from Catalyst Center. |
+| Interface (uplink or host port) does not exist on the switch, e.g. `Gi0/24` instead of `Gi1/0/24` | Webex + NetBox | `Day N NOT started: <host> (<serial>). interface not on this switch: 'GigabitEthernet0/24' (closest: GigabitEthernet1/0/24, ...). Nothing was deployed.` Tagged `dayn-failed`. | Fix `uplink_interface` / Ports in the sheet, edit the NetBox Local config context (`pnp_dayn.params`, or delete `pnp_dayn` and re-run Workflow 1), re-add `dayn-pending`. If Catalyst Center cannot return the interface list, the check is skipped and the deploy proceeds. |
 | Composite or member template missing, renamed, or lacking a parameter value | Webex + NetBox | `Day N NOT started: <host> (<serial>). composite template '<x>' not found in project '<p>'` / `composite '<x>' does not contain: <t>` / `template '<t>' needs parameter '<p>' but there is no value or default` / `could not read template '<t>' from Catalyst Center` | Create or rename the template to match `config.json` (e.g. `TM-FACTORY-L2-SWITCH`); give the parameter a default in the template. Then re-add `dayn-pending`. |
 | More than 3 member templates | Webex + NetBox | `plans with more than 3 member templates are not supported yet` | Reduce the composite to 3 members (or ask for the limit to be raised). |
 | Catalyst Center rejects the deploy request | Webex + NetBox | `Day N NOT started... Catalyst Center did not accept the template deploy (no task or deployment id returned)` | Open the "Deploy Day N Templates" step: the response body says why (bad ids, unknown device). |

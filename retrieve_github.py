@@ -142,6 +142,21 @@ def table(book, tab, required, optional=()):
     return res
 
 
+IF_LONG = {"gi": "GigabitEthernet", "gig": "GigabitEthernet", "gigabit": "GigabitEthernet", "gigabitethernet": "GigabitEthernet",
+           "te": "TenGigabitEthernet", "ten": "TenGigabitEthernet", "tengigabitethernet": "TenGigabitEthernet",
+           "fa": "FastEthernet", "fastethernet": "FastEthernet", "eth": "Ethernet", "ethernet": "Ethernet",
+           "twe": "TwentyFiveGigE", "twentyfivegige": "TwentyFiveGigE", "fo": "FortyGigabitEthernet", "fortygigabitethernet": "FortyGigabitEthernet",
+           "hu": "HundredGigE", "hundredgige": "HundredGigE"}
+
+
+def norm_if(name):
+    """Gi1/0/24 -> GigabitEthernet1/0/24 (spelling only; the port numbers are never changed)."""
+    m = re.fullmatch(r"([A-Za-z]+)\s*(\d.*)", str(name).strip())
+    if m and m.group(1).lower() in IF_LONG:
+        return IF_LONG[m.group(1).lower()] + m.group(2).replace(" ", "")
+    return str(name).strip()
+
+
 def expand(iface):
     m = re.fullmatch(r'(.*?)(\d+)-(\d+)', iface)
     if not m:
@@ -191,6 +206,8 @@ if not errors:
     for num, d in devices:
         host = d["hostname"]
         tag = f"Devices row {num} [{host or d['serial']}]"
+        if d.get("uplink_interface"):
+            d["uplink_interface"] = norm_if(d["uplink_interface"])
         if host in by_host:
             errors.append(f"{tag} duplicate hostname")
             continue
@@ -221,6 +238,7 @@ if not errors:
             "site_name": site["catc_path"],
             "netbox_site": site.get("netbox_site") or d["site"],
             "role": role_name,
+            "refresh_plan": "Yes" if str(defaults.get("refresh_plan", "No")).strip().lower() == "yes" else "No",
             "create_sites": "Yes" if str(defaults.get("create_missing_sites", "No")).strip().lower() == "yes" else "No",
             "country": str(defaults.get("country", "")),
             "day0_template": mode.get("day0_template", ""),
@@ -254,7 +272,7 @@ if not errors:
             errors.append(f"Ports row {num}: access_vlan '{p['access_vlan']}' is not a number")
             continue
         try:
-            names = expand(p["interface"])
+            names = expand(norm_if(p["interface"]))
         except ValueError as e:
             errors.append(f"Ports row {num}: {e}")
             continue
@@ -382,6 +400,8 @@ if not errors:
                    "params": dparams, "hostname": dev["hostname"], "site": raw["site"]}
             if plan.get("host_ports"):
                 rec["fill_ports"] = int(dayn.get("host_port_max", 48))
+            # checked against the switch's real interface list before anything is deployed
+            rec["interfaces"] = ([str(raw["uplink_interface"])] if raw.get("uplink_interface") else []) + [pt["name"] for pt in dev["ports"]]
             dev["dayn_b64"] = base64.b64encode(zlib.compress(json.dumps(rec, separators=(",", ":")).encode())).decode()
     data = list(by_host.values())
 
