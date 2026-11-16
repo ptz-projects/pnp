@@ -7,7 +7,7 @@
     "native_vlan": "1",
     "create_missing_sites": "No",
     "country": "Australia",
-    "refresh_plan": "No"
+    "refresh_plan": "Yes"
   },
   "modes": {
     "STAGING_CONFIG": {
