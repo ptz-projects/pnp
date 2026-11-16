@@ -240,7 +240,7 @@ if not errors:
             "role": role_name,
             "refresh_plan": "Yes" if str(defaults.get("refresh_plan", "No")).strip().lower() == "yes" else "No",
             "create_sites": "Yes" if str(defaults.get("create_missing_sites", "No")).strip().lower() == "yes" else "No",
-            "country": str(defaults.get("country", "")),
+            "country": str(defaults.get("country", "")) if str(defaults.get("country_fallback", "No")).strip().lower() == "yes" else "",
             "day0_template": mode.get("day0_template", ""),
             "template_project": mode.get("project") or defaults.get("template_project", ""),
             "template_project_enc": urllib.parse.quote(mode.get("project") or defaults.get("template_project", ""), safe=""),

@@ -5,9 +5,10 @@
     "template_project": "Onboarding Configuration",
     "system_mtu": "1500",
     "native_vlan": "1",
-    "create_missing_sites": "No",
+    "create_missing_sites": "Yes",
     "country": "Australia",
-    "refresh_plan": "Yes"
+    "refresh_plan": "No",
+    "country_fallback": "No"
   },
   "modes": {
     "STAGING_CONFIG": {
