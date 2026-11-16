@@ -223,11 +223,8 @@ if not errors:
         raw_row[host] = d
         upg = (d.get("software_upgrade") or "no").strip().lower()
         if upg in ("yes", "y", "true"):
-            img = images.get(d["pid"], "")
-            if not img:
-                errors.append(f"{tag} software_upgrade is Yes but config.json 'images' has no image ID for {d['pid']}")
-                continue
-            image_for = img
+            # an image ID in config.json 'images' overrides; otherwise the workflow looks up the golden image
+            image_for = images.get(d["pid"], "") or "golden"
         elif upg in ("no", "n", "false", ""):
             image_for = ""
         else:

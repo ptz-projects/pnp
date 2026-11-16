@@ -16,13 +16,13 @@ Files read by the "Catalyst Center PnP Lifecycle" workflow (from the repo's main
 ## Columns by mode
 - Staging in a Lab: serial, pid, hostname, site, mgmt_vlan (optional: role, system_mtu, software_upgrade).
 - Factory Install at Site: also mgmt_ip (with prefix), gateway, uplink_interface (optional: native_vlan).
-- `software_upgrade`: Yes upgrades to the image for the model in `config.json` -> `images` (error if none); blank or No skips the upgrade.
+- `software_upgrade`: Yes upgrades during the claim to the **golden image** for the switch, found the way the Catalyst Center claim wizard does it: the site's golden image setting for the model (inherited from parent sites), falling back to a golden-tagged image that lists the model. An image ID in `config.json` -> `images` for that model overrides it. Blank or No skips the upgrade.
 
 ## config.json
 - `defaults`: role, template project, MTU, native VLAN, Day N template name.
 - `modes`: per mode, the Day 0 template name and its template variables. Values use placeholders: `{hostname}`, `{system_mtu}`, `{mgmt_vlan}`, `{uplink_interface}`, `{allowed_vlans}`, `{native_vlan}`, `{mgmt_ip}`, `{subnet_mask}`, `{gateway}`, `{pid}`, `{serial}`.
 - `sites`: optional overrides only (leave empty `{}`). Sites come from NetBox, see **Sites** below.
-- `images`: model (pid) -> Catalyst Center image ID, used only when `software_upgrade` is Yes.
+- `images`: optional override, model (pid) -> Catalyst Center image ID, used only when `software_upgrade` is Yes. Leave empty to use the golden image.
 
 ## Sites (NetBox is the source of truth)
 - The `site` column in the sheet is the **NetBox site name** (case does not matter). Nothing to edit in `config.json` when a site is added.
@@ -58,10 +58,11 @@ Staging switches are managed by Catalyst Center through the Gi0/0 management por
 - **Stacks:** the host-port template supports one interface prefix per switch (e.g. `GigabitEthernet1/0`). A stack (Gi1/0/x plus Gi2/0/x) fails validation with "ports use more than one prefix". Needs a second prefix parameter or generating the port lines in Python. Single switches only for now. Stack members also need `stack: true` on the PnP import and per-member serials.
 - **Day N progress and completion (observability):** "Day N started: ... Templates are deploying; the next run will confirm the result" is the only message until the next scheduled Day N run, which posts the success or failure. Nothing tells Webex the moment the templates finish. Catalyst Center's Activities log shows it live: "Going to deploy template ..." and "Successfully deployed template ..." for each member, in order (e.g. MGMT-INTERFACE, then BASE-CONFIG, then HOST-CONFIG, about a minute apart on the lab switch). Peter found no webhook or event subscription for template-deploy progress, so for now: watch Activities, or shorten the Day N schedule interval. Options to close the gap: a short-interval schedule for the confirm step only; a Catalyst Center Events subscription (Platform > Developer Toolkit > Event Notifications) to Workflows or Webex, if template-deploy events turn out to be offered; or a follow-up check in the same run that polls the task for a few minutes after the deploy.
 - **Open bug: Catalyst Center device tag not removed after a successful Day N** (Staging, sw-03). Cause not found: the lab switch was deleted from Catalyst Center and NetBox before it was diagnosed. The removal path (`DELETE /dna/intent/api/v1/tag/<tag id>/member/<device id>`) matches the documented API, but the DELETE call has never been seen working in Workflows. On the next run, read the tag note at the end of the "Day N complete" Webex message (removed / tag does not exist / switch not found in inventory / could not read it) and the output of "CatC - Remove Day N Tag from Device". Check whether the Factory run does the same.
+- **Golden image lookup is untested live:** it uses `GET /dna/intent/api/v1/image/importation?isTaggedGolden=true` and `GET /api/v1/commonsetting/swim/<site id>?key=swim.tag.<mdfId>.*` (copied from the claim wizard HAR; role order tried: unknown, access, distribution, core, border_router). If the first step returns nothing for your model, send the raw output of `CatC - List Golden Images`.
 - **Switch added to Catalyst Center first (not by this workflow):** not catered for. If someone already added the switch to PnP by hand (or it registered itself), Workflow 1 reports "already in Catalyst Center" and skips it: no NetBox device, no Day N plan. Needs a decision on what to do with an unclaimed or hand-claimed switch: adopt it (create the NetBox device and plan, and claim it if still unclaimed), or only report it. Also decide how to treat a switch already in the PnP list with a different hostname, site or template.
 - **PnP errors after the claim** (e.g. Day-0 config generation failing on old firmware, `NCOB02088`) are only visible in Catalyst Center today. Planned: report the PnP error text to Webex from the Day N workflow.
 - New sites inherit device credentials from the parent area; the workflow does not set credentials. Check the area's credentials (e.g. SNMPv3 SHA-2 needs IOS-XE 17.10.1a or later) before the first switch at a new site.
-- Auto-create of missing sites needs a live test (documented site-create call, untested).
+- Auto-create of missing sites: confirmed working live (building created under an existing area).
 
 ## Refreshing a stale Day N plan
 - The Day N plan is saved in NetBox (Local config context, `pnp_dayn`) when the switch is claimed. Fixing the sheet afterwards does not change it.
@@ -116,7 +117,7 @@ Validation messages (all arrive in the single `Workflow Failed during validation
 | `... mgmt_ip X is also used by <host>` | Same management address on two rows. |
 | `... uplink_interface X is also listed as a host port on the Ports tab` | Remove that interface from Ports (it would be turned into an access port). |
 | `... mgmt_ip '<x>' is not valid` / `gateway ... is not inside <net>` / `gateway '<x>' is not a valid IP address` | Use address/prefix (10.1.10.21/24); the gateway must be inside that subnet. |
-| `... software_upgrade is Yes but config.json 'images' has no image ID for <pid>` | Add the image ID, or set software_upgrade to No. |
+| `... software_upgrade is Yes but no golden software image was found for this model ...` (Webex, template/claim failure) | Mark an image golden for that model in Catalyst Center (Design > Image Repository, for the site or Global), or put an image ID in `config.json` `images`, or set software_upgrade to No. |
 | `VLANs row n: hostname '<x>' is not on the Devices tab` / `vlan_id '<x>' is not a number` / `VLAN n listed twice` | Fix the VLANs tab (hostname `*` applies to every switch). |
 | `Ports row n: ... is not on the Devices tab` / `access_vlan ... is not a number` / `<port> listed twice` | Fix the Ports tab. Use full names (GigabitEthernet0/1) or ranges (GigabitEthernet0/1-8). |
 | `... no Day N plan for <mode> / <type> in config.json` | Add the plan, or set switch_type to a supported value (L2). |
@@ -131,6 +132,7 @@ Validation messages (all arrive in the single `Workflow Failed during validation
 | Situation | Where | Message / what you see | Fix |
 |---|---|---|---|
 | Switch not in inventory, or not Reachable and Managed yet | Run only | Nothing sent. The switch stays `dayn-pending` and is retried every run. | Wait for onboarding; check the switch is reachable from Catalyst Center. |
+| Day N templates deployed but the NetBox update failed (e.g. the `final_status` does not exist in NetBox) | Webex | `Day N templates deployed on <host> (<serial>), but the NetBox update FAILED: NetBox rejected the update: ...` The device stays `dayn-deploying`; the next Day N run retries the update. | Fix the cause (create the status in NetBox, see below), then wait for the next run. |
 | Interface (uplink or host port) does not exist on the switch, e.g. `Gi0/24` instead of `Gi1/0/24` | Webex + NetBox | `Day N NOT started: <host> (<serial>). interface not on this switch: 'GigabitEthernet0/24' (closest: GigabitEthernet1/0/24, ...). Nothing was deployed.` Tagged `dayn-failed`. | Fix `uplink_interface` / Ports in the sheet, edit the NetBox Local config context (`pnp_dayn.params`, or delete `pnp_dayn` and re-run Workflow 1), re-add `dayn-pending`. If Catalyst Center cannot return the interface list, the check is skipped and the deploy proceeds. |
 | Composite or member template missing, renamed, or lacking a parameter value | Webex + NetBox | `Day N NOT started: <host> (<serial>). composite template '<x>' not found in project '<p>'` / `composite '<x>' does not contain: <t>` / `template '<t>' needs parameter '<p>' but there is no value or default` / `could not read template '<t>' from Catalyst Center` | Create or rename the template to match `config.json` (e.g. `TM-FACTORY-L2-SWITCH`); give the parameter a default in the template. Then re-add `dayn-pending`. |
 | More than 3 member templates | Webex + NetBox | `plans with more than 3 member templates are not supported yet` | Reduce the composite to 3 members (or ask for the limit to be raised). |
