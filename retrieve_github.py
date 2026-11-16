@@ -398,6 +398,7 @@ if not errors:
             rec = {"v": 1, "mode": flag, "switch_type": stype, "project": dayn.get("project", ""),
                    "composite": plan.get("composite", ""), "members": plan.get("members", []),
                    "params": dparams, "hostname": dev["hostname"], "site": raw["site"]}
+            rec["final_status"] = str((dayn.get("final_status") or {}).get(flag) or ("installed" if flag == "FACTORY_CONFIG" else "staged"))
             if plan.get("host_ports"):
                 rec["fill_ports"] = int(dayn.get("host_port_max", 48))
             # checked against the switch's real interface list before anything is deployed
