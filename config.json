@@ -9,7 +9,7 @@
     "country": "Australia",
     "refresh_plan": "No",
     "country_fallback": "No",
-    "remove_inactive": "No"
+    "remove_inactive": "Yes"
   },
   "modes": {
     "STAGING_CONFIG": {
