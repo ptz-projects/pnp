@@ -235,6 +235,7 @@ if not errors:
             "site_name": site["catc_path"],
             "netbox_site": site.get("netbox_site") or d["site"],
             "role": role_name,
+            "remove_inactive": "Yes" if str(mode.get("remove_inactive", defaults.get("remove_inactive", "No"))).strip().lower() == "yes" else "No",
             "refresh_plan": "Yes" if str(defaults.get("refresh_plan", "No")).strip().lower() == "yes" else "No",
             "create_sites": "Yes" if str(defaults.get("create_missing_sites", "No")).strip().lower() == "yes" else "No",
             "country": str(defaults.get("country", "")) if str(defaults.get("country_fallback", "No")).strip().lower() == "yes" else "",
